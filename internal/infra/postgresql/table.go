@@ -21,7 +21,7 @@ func (p Postgres) CreateTableLikeTable(schema, table, parent string) error {
 }
 
 func (p Postgres) DropTable(schema, table string) error {
-	query := fmt.Sprintf("DROP TABLE %s.%s", schema, table)
+	query := fmt.Sprintf("DROP TABLE %s", pgx.Identifier{schema, table}.Sanitize())
 	p.logger.Debug("Drop table", "schema", schema, "table", table, "query", query)
 
 	_, err := p.conn.Exec(p.ctx, query)
