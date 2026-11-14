@@ -39,8 +39,7 @@ func TestCreateTableLikeTable(t *testing.T) {
 func TestDropTable(t *testing.T) {
 	schema := testSchema
 	table := testTable
-	fullQualifiedName := fmt.Sprintf("%s.%s", schema, table)
-	query := fmt.Sprintf(`DROP TABLE %s`, fullQualifiedName)
+	query := `DROP TABLE "public"."my_table"`
 
 	mock, p := setupMock(t, pgxmock.QueryMatcherEqual)
 
@@ -51,6 +50,52 @@ func TestDropTable(t *testing.T) {
 	mock.ExpectExec(query).WillReturnError(ErrPostgreSQLConnectionFailure)
 	err = p.DropTable(schema, table)
 	assert.Error(t, err, "DropTable should fail")
+}
+
+func TestDropTableQuotesIdentifiers(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+		table  string
+		query  string
+	}{
+		{
+			name:   "lowercase",
+			schema: "public",
+			table:  "my_table",
+			query:  `DROP TABLE "public"."my_table"`,
+		},
+		{
+			name:   "mixed_case_partition",
+			schema: "public",
+			table:  "OrderLogs_2024_01_01",
+			query:  `DROP TABLE "public"."OrderLogs_2024_01_01"`,
+		},
+		{
+			name:   "mixed_case_schema",
+			schema: "TenantData",
+			table:  "OrderLogs_2024_01_01",
+			query:  `DROP TABLE "TenantData"."OrderLogs_2024_01_01"`,
+		},
+		{
+			name:   "embedded_quotes",
+			schema: `Tenant"Data`,
+			table:  `Order"Logs_2024_01_01`,
+			query:  `DROP TABLE "Tenant""Data"."Order""Logs_2024_01_01"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock, p := setupMock(t, pgxmock.QueryMatcherEqual)
+
+			mock.ExpectExec(tt.query).WillReturnResult(pgxmock.NewResult("DROP", 1))
+
+			err := p.DropTable(tt.schema, tt.table)
+			assert.NoError(t, err)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
 
 func TestIsTableExists(t *testing.T) {
